@@ -1,0 +1,234 @@
+---
+title: "MSDS 5301 NYC Shooting"
+author: "Philip Reeves"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+```
+
+## NYPD Shooting Incident (2006 - 2021) Report
+
+# Import NYPD Shooting Data 
+The NYPD Shooting Incident Data set was gathered and reviewed by the NYC Office of Management Analysis and Planning.The data was published on the City of New York Open Data website. Each data point represents a shooting incident in NYC from 2006 through 2021. The information in the data set includes event location, date and time, and demographics of the suspect and victim.  
+By analyzing this data, we can start to understand when and where these incidents occur. This can help police and communities minimize the number of incidents. They can look back at strategies that worked and ones that didn't. They can look ahead and plan on the best way to allocate resources. 
+```{r import NYPD Shooting data}
+
+url_NYPD <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+
+NYPD <- read.csv(url_NYPD)
+```
+
+# Clean NYPD Shooting Data 
+After importing the complete NYPD Shooting Incident Data (Historic) data set, I modified the data by focusing on the location, date, time, and victim demographics. I formatted the date, time, and statistical murder flag (an indication if a homicide occurred) as date, time, and logical data objects respectively. I also added a simply counter of events labeled "Shootings."  
+To get an understanding of the data, I created two simple bar graphs displaying the number of shootings in relation to the NYC Boroughs they occurred in (Figure - 1) and and the total number of shootings in relation to the year they occurred in (Figure - 2). As we can see from Figure - 1, Brooklyn has the highest number of total incidents followed by the Bronx. Staten Island has by far the lowest number of incidents. In Figure - 2, we can see how the number of incidents was highest in 2006 and seems to decline until it jumps up in 2020 and 2021. Let's take a closer look at this data.
+
+```{r clean nypd data}
+NYPD_clean <- NYPD %>%
+  select(c("OCCUR_DATE","OCCUR_TIME","BORO","PRECINCT",
+           "STATISTICAL_MURDER_FLAG","VIC_AGE_GROUP","VIC_SEX","VIC_RACE")) %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE),
+         OCCUR_TIME = hms(OCCUR_TIME),
+         STATISTICAL_MURDER_FLAG = as.logical(STATISTICAL_MURDER_FLAG),
+         Shootings = 1,
+         Year = year(OCCUR_DATE))
+
+
+NYPD_clean %>%
+  ggplot(aes(x = BORO, fill = BORO)) +
+  geom_bar() +
+  labs(title = "NYPD Shootings Incidents by Borough",
+       subtitle = "(2006 - 2021)",
+       x = "NYC Boroughs",
+       y = "Total Number of Shootings",
+       caption = "(Figure - 1)")
+
+NYPD_clean %>%
+  ggplot(aes(x = Year)) +
+  geom_bar(fill = "lightblue",show.legend = FALSE) +
+  labs(title = "NYPD Shootings Incidents by Year",
+       x = "Years (2006 - 2021)",
+       y = "Total Number of Shootings",
+       caption = "(Figure - 2)")
+
+```
+
+# NYPD Shootings by Year 
+After seeing the differences in boroughs and incidents each year, I created two new the data sets that focus on the year and borough. Let's look at the first set. Figure - 3 explores the data we saw in Figure - 1, emphasizing the change in total number of incidents, and tracing it's rise and fall. As we can see, there have been less incidents in every year since 2006. However, we see a step decrease starting in 2012, rising slightly in 2014 and 2015, then again dropping in 2017 through 2019. In 2020 and 2021 we see a drastic increase to levels similar to that of 2006.  
+It would be worth investigating what events happened during this time that may coincide with these changes. The first major event that comes to mind is the Covid-19 pandemic that started in early 2020. There could have been a major policy change or community activism in 2012 that resulted in a decrease in gun violence. Maybe our data is not complete. There could have been a decrease in reporting of shooting incidents during that time. Further investigation is needed.
+Now, let's look at the second data set that explores the number of shooting incidents per year as reflected across the five boroughs.
+```{r group data by Year}
+NYPD_year <- NYPD_clean %>%
+  group_by(Year,Shootings) %>%
+  summarize(Shootings = sum(Shootings),
+            STATISTICAL_MURDER_FLAG = sum(STATISTICAL_MURDER_FLAG)) %>%
+  select(Year,Shootings,STATISTICAL_MURDER_FLAG) %>%
+  ungroup()
+
+NYPD_year %>% slice_max(Shootings, n = 4)
+NYPD_year %>% slice_min(Shootings, n = 4)
+NYPD_year %>%
+  ggplot(aes(x = Year, y = Shootings)) +
+  geom_line() +
+  geom_point(color="red") +
+  scale_x_discrete(limits = c(2006:2021)) +
+  labs(
+    title = "NYPD Shooting Incidents by Year",
+    x = "Years (2006 - 2021)",
+    y = "Total Number of Shootings",
+    caption = "(Figure - 3)")
+
+```
+
+# NYPD Shooting by Borough per Date 
+We saw earlier that the number of incidents per year start at its highest in 2006, began to decline through 2019, and sharply rose in 2020. In Figure - 4, I broke that data up into the the five boroughs. As we can see, Brooklyn, and the Bronx are consistently above the other boroughs which was also apparent in the bar graph, Figure - 1. Both Brooklyn, and the Bronx follow the similar pattern that we saw in the overall data set.This pattern is also reflected in Manhattan and Queens.Interestingly, Staten Island remains mostly level throughout the time period. It seems whatever variables that influenced the change in rates affected all the boroughs with the exception of Staten Island. Further investigation into the differences in the boroughs, such as population and population density, as well as many others, may help explain the differences. More data on the boroughs would be helpful in understanding these trends.  
+We've seen differences in the total data over the years. Now, let's take a closer look at the frequency of incidents per day over that time period.
+```{r groupby boro per date}
+NYPD_boro <- NYPD_clean %>%
+  group_by(BORO, OCCUR_DATE,Shootings) %>%
+  summarize(Shootings = sum(Shootings),
+            STATISTICAL_MURDER_FLAG = sum(STATISTICAL_MURDER_FLAG)) %>%
+  select(BORO,OCCUR_DATE,Shootings,STATISTICAL_MURDER_FLAG) %>%
+  ungroup()
+
+NYPD_boro_year <- NYPD_clean %>%
+  mutate(Year = year(OCCUR_DATE)) %>%
+  group_by(BORO, Year, Shootings) %>%
+  summarize(Shootings = sum(Shootings),
+            STATISTICAL_MURDER_FLAG = sum(STATISTICAL_MURDER_FLAG)) %>%
+  select(BORO, Year,Shootings,STATISTICAL_MURDER_FLAG) %>%
+  ungroup()
+
+NYPD_boro_total <- NYPD_boro_year %>%
+  group_by(BORO) %>%
+  summarize(Shootings = sum(Shootings))
+(7402 + 10365)/ sum(NYPD_boro_total$Shootings)
+736/ sum(NYPD_boro_total$Shootings)
+NYPD_boro_year %>%
+  ggplot(aes(x = Year, y = Shootings,color = BORO)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "NYPD Shootings by Borough by Year",
+       subtitle = "(2006 - 2021)",
+       x = "Year",
+       y = "Number of Shootings",
+       caption = "(Figure - 4)")
+```
+
+# NYPD Shooting Data by Date 
+
+As we say from looking at the number of shooting incidents per year, the numbers first decreased and then increased. To get an idea on how those differences would be reflected on a daily bases, I aggregated the number of incidents by the day they occurred. In Figure - 5 we can see that the number of shootings per day seems to oscillate in a somewhat consistent pattern. We can also see two significant peaks in the data, occurring on July 5th 2020 with 36 incidents and September 4th 2011 with 27 incidents. These dates coincided with the Fourth of July and Labor day weekend holidays. From Figure - 5 it appears that the pattern of shootings is increasing in the middle of the year, or summertime, and decreasing at the beginning and ending of the year, the winter time. To get a better look on how the time of the year plays a role in the number of incidents I combined all the shooting that occurred on the specific day of the year over the time period. Figure - 6 represents this data set.  
+We can see this pattern of an increase of shooting incidents in the summertime, starting around June and then decreasing slightly in September. Interestingly the two peaks reflected in Figure 6 occur on July 5th, 196 incidents, and January 1st, 145 incidents, again around the Fourth of July and now New Years celebrations. It would be wroth investigating what factors may contribute to the increase number of shootings during the summertime. The first thing that comes to mind is the differences in weather condition. It is also interesting that the highest number of shootings by time of year happen on the day after major holidays. Next, lets look at the time of day the shootings incidents occurred.
+```{r group data by occur date}
+NYPD_date <- NYPD_clean %>%
+  group_by(OCCUR_DATE,Shootings,STATISTICAL_MURDER_FLAG) %>%
+  summarize(Shootings = sum(Shootings),
+
+            STATISTICAL_MURDER_FLAG = sum(STATISTICAL_MURDER_FLAG)) %>%
+  select(OCCUR_DATE,Shootings,STATISTICAL_MURDER_FLAG) %>%
+  ungroup()
+
+NYPD_date %>% slice_max(Shootings, n=2)
+
+NYPD_date %>%
+  ggplot(aes(x = OCCUR_DATE, y = Shootings)) +
+  geom_line() +
+  scale_x_date(date_labels = "%Y %b") +
+  labs(title = "NYPD Shootings Per Day",
+       subtile = "(2006 - 2021)",
+       x = "Date",
+       y = "Shootings per day",
+       caption = "(Figure - 5)")
+
+
+```
+
+```{r groupy by time of year}
+NYPD_time_year <- NYPD_clean %>%
+  mutate(Time_year = format(as.Date(OCCUR_DATE), "%m/%d")) %>%
+  mutate(Time_year = as.Date(Time_year,"%m/%d")) %>%
+  group_by(Time_year,Shootings) %>%
+  summarize(Shootings = sum(Shootings),
+            STATISTICAL_MURDER_FLAG = sum(STATISTICAL_MURDER_FLAG)) %>%
+  select(Time_year,Shootings,STATISTICAL_MURDER_FLAG) %>%
+  ungroup()
+
+NYPD_time_year %>% slice_max(Shootings, n = 2)
+NYPD_July_5 <- NYPD_clean %>%
+  mutate(Time_year = format(as.Date(OCCUR_DATE), "%m/%d"),
+         Hour = hour(OCCUR_TIME)) %>%
+  mutate(Time_year = as.Date(Time_year,"%m/%d")) %>%
+  filter(Time_year == "2022-07-05") %>%
+  group_by(Hour,Shootings) %>%
+  summarize(Shootings = sum(Shootings))
+
+
+NYPD_time_year %>%
+  ggplot(aes(x = Time_year, y = Shootings)) +
+  geom_line() +
+  geom_point(data = NYPD_time_year %>% slice_max(Shootings, n = 2),
+             aes(color="Most Shootings")) +
+  scale_x_date(date_labels = "%b") +
+  labs(title = "NYPD Shootings on that Day",
+       subtile = "(2006 - 2021)",
+       colour = "",
+       x = "Day",
+       y = "Shootings on that day",
+       caption = "(Figure - 6)")
+```
+
+# NYPD Shooting Data by Time of Day 
+Similar to the date and time of year of the shooting incidents, I created a data set focusing on the time of day (Figure - 7) and incidents per hour (Figure - 8). In Figure - 7, we can see that there is an increase in the number of hours that occur in the earlier morning and late evening. To get a better look, I aggregated the number of incidents by hour in Figure - 8. Looking at Figure - 8, we can clearly see that the number of incidents is at its highest around midnight and lowest around 8AM. By creating a predictive model of the data set, we can see that timing per day roughly follows this pattern. Looking back at the high number of incidents that occurred on July 5th, out of the 196 incidents, 149 of them occurred before 7AM. It seems the the highest number of shooting incidents happens the night after Fourth of July. Investigation on why this occurs and possible interventions to prevent this should be explored.  
+```{r group by time of day}
+NYPD_time_day <- NYPD_clean %>%
+  group_by(OCCUR_TIME,Shootings) %>%
+  summarize(Shootings = sum(Shootings),
+            STATISTICAL_MURDER_FLAG = sum(STATISTICAL_MURDER_FLAG)) %>%
+  select(OCCUR_TIME,Shootings,STATISTICAL_MURDER_FLAG)
+
+NYPD_time_day %>%
+  ggplot(aes(x = OCCUR_TIME, y = Shootings)) +
+  geom_line() +
+  scale_x_time() +
+  labs(title = "NYPD Shootings by the Time of Day",
+       subtitle = "(2006 - 2021)",
+       x = "Time of day (24 Hour Time System)",
+       y = "Shootings",
+       caption = "(Figure - 7)")
+
+NYPD_time_hour <- NYPD_clean %>%
+  mutate(Hour = hour(OCCUR_TIME)) %>%
+  group_by(Hour,Shootings) %>%
+  summarize(Shootings = sum(Shootings),
+            STATISTICAL_MURDER_FLAG = sum(STATISTICAL_MURDER_FLAG)) %>%
+  mutate(Hour2 = Hour^2) %>%
+  select(Hour,Shootings,STATISTICAL_MURDER_FLAG, Hour2)
+
+NYPD_time_hour_model <- lm(data = NYPD_time_hour, Shootings ~ Hour + Hour2)
+summary(NYPD_time_hour_model)
+NYPD_time_hour %>%
+  ggplot(aes(x = Hour, y = Shootings)) +
+  geom_point() +
+  stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1) +
+  labs(title = "NYPD Shootings by Time of Day per Hour",
+       subtitle = "(2006-2021)",
+       x = " Hours (24 Hour Time System)",
+       y = "Shootings that Hour",
+       caption = "(Figure - 8)")
+
+
+```
+
+# Conclusion and Possible Bias in NYPD Shooting Incidents Data and Report
+After examining the NYPD Shooting Incidents data, focusing on shooting location, date, and time, I found an interesting differences in the number of incidents in NYC boroughs and the frequency of shootings during the year and time of day. Brooklyn and the Bronx consistently had higher number of incidents over the time period from 2006 to 2021.Starting in 2006 the total number of shootings per year started to decrease overall. In 2020, there was jump back to the levels in 2006. As the total numbers of shootings fluctuated from year to year, the changes were reflected in all the boroughs, with the exception of Staten Island. When looking at the frequency of shooting throughout a year, there was an increased number of shootings in the summertime and spikes around holidays. A majority of the shooting incidents took place at night.  
+These observations can help police and communities design, implement, and test strategies to reduce the number of shooting incidents in NYC.
+Since the data was gathered by police reports, the data may be biased due to under reporting of incidents, clerical errors, and disproportional policing in certain areas. There is also the possibility of duplicated and missing reports from the data gathering process. My own personal bias may also have played a factor. I was interested in looking at the time of year distribution of incidents because I read that there is an increase in crime during the hotter, summer, months. This could be a form of confirmation bias.  
+Moving forward, I think it would be interesting to explore how factors such as population density, population demographics, and the weather may contribute to the rates of shooting incidents in NYC. 
+
